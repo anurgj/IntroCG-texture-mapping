@@ -32,9 +32,13 @@ var vPosAttribLoc; // where to put position for vertex shader
 var vNormAttribLoc;
 var vTexAttribLoc;
 var uSampler;
+var alphaVal;
 var texture = [];
-// var texture1;
-// var triTexture;
+var alpha = [];
+
+var blend = false;
+var blendUniform;
+
 var mMatrixULoc; // where to put model matrix for vertex shader
 var pvmMatrixULoc; // where to put project model view matrix for vertex shader
 var ambientULoc; // where to put ambient reflecivity for fragment shader
@@ -509,6 +513,8 @@ function loadModels() {
         inputTriangles[whichSet].glTextures = []; // flat texture list for webgl
         inputTriangles[whichSet].texture =
           inputTriangles[whichSet].material.texture;
+        inputTriangles[whichSet].alpha =
+          inputTriangles[whichSet].material.alpha;
 
         var numVerts = inputTriangles[whichSet].vertices.length; // num vertices in tri set
         for (whichSetVert = 0; whichSetVert < numVerts; whichSetVert++) {
@@ -544,7 +550,7 @@ function loadModels() {
           1 / numVerts
         ); // avg ctr sum
 
-        console.log(inputTriangles[whichSet].glTextures);
+        // console.log(inputTriangles[whichSet].glTextures);
         // send the vertex coords and normals to webGL
         vertexBuffers[whichSet] = gl.createBuffer(); // init empty webgl set vertex coord buffer
         gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[whichSet]); // activate that buffer
@@ -775,7 +781,9 @@ function setupShaders() {
         varying vec3 vVertexNormal; // normal of fragment
         varying highp vec2 vTextureCoord;
 
+        uniform float alphaVal;
         uniform sampler2D uSampler;
+        uniform bool blend;
             
         void main(void) {
         
@@ -798,8 +806,13 @@ function setupShaders() {
             vec3 colorOut = ambient + diffuse + specular; // no specular yet
             // gl_FragColor = vec4(colorOut, 1.0); 
             // gl_FragColor = vec4(vTextureCoord, 0.0, 1.0);
-            gl_FragColor = texture2D(uSampler, vTextureCoord);
-        }
+            vec4 texture = texture2D(uSampler, vTextureCoord);
+            if(blend) {
+                gl_FragColor = vec4(colorOut, 1.0) - texture;
+            } else {
+                gl_FragColor = vec4(colorOut * texture.rgb, alphaVal*texture.a);
+            }
+          }
     `;
 
   try {
@@ -848,7 +861,9 @@ function setupShaders() {
         vTexAttribLoc = gl.getAttribLocation(shaderProgram, "aTextureCoord");
         gl.enableVertexAttribArray(vTexAttribLoc);
 
+        alphaVal = gl.getUniformLocation(shaderProgram, "alphaVal");
         uSampler = gl.getUniformLocation(shaderProgram, "uSampler");
+        blendUniform = gl.getUniformLocation(shaderProgram, "blend");
 
         // locate vertex uniforms
         mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix"); // ptr to mmat
@@ -963,6 +978,9 @@ function renderModels() {
   window.requestAnimationFrame(renderModels); // set up frame render callback
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // clear frame/depth buffers
+  gl.depthMask(false);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   // set up projection and view
   // mat4.fromScaling(hMatrix,vec3.fromValues(-1,1,1)); // create handedness matrix
@@ -1001,6 +1019,9 @@ function renderModels() {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture[whichTriSet]);
     gl.uniform1i(uSampler, 0);
+
+    gl.uniform1f(alphaVal, currSet.alpha);
+    gl.uniform1i(blendUniform, blend);
 
     // triangle buffer: activate and render
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[whichTriSet]); // activate
