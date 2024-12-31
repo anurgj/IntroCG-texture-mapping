@@ -1,3 +1,3 @@
-# prog4 shell
+# texture mapping in webgl
 
-This repo branch contains code for program 4 in nc state cg class 2024.
+This repo branch contains code that performs texture mapping.
